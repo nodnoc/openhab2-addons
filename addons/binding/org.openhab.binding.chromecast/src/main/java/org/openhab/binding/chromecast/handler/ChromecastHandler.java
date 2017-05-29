@@ -8,6 +8,15 @@
  */
 package org.openhab.binding.chromecast.handler;
 
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.commons.lang.StringUtils;
 import org.eclipse.smarthome.core.audio.AudioFormat;
 import org.eclipse.smarthome.core.audio.AudioHTTPServer;
@@ -32,6 +41,7 @@ import org.eclipse.smarthome.core.types.RefreshType;
 import org.openhab.binding.chromecast.ChromecastBindingConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import su.litvak.chromecast.api.v2.Application;
 import su.litvak.chromecast.api.v2.ChromeCast;
 import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEvent;
@@ -41,15 +51,6 @@ import su.litvak.chromecast.api.v2.MediaStatus.IdleReason;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 import su.litvak.chromecast.api.v2.Status;
 import su.litvak.chromecast.api.v2.Volume;
-
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The {@link ChromecastHandler} is responsible for handling commands, which are
@@ -81,6 +82,10 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
     private PercentType volume;
     private String callbackUrl;
     private String appSessionId;
+    // status info refresh job
+    private ScheduledFuture<?> refreshJob;
+    // refresh rate in seconds
+    private BigDecimal refresh;
 
     /**
      * Constructor.
@@ -124,6 +129,14 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
         futureConnect = scheduler.schedule(() -> {
             try {
                 chromecast.connect();
+                // if refresh interval is not set or a negative number don't
+                // schedule stats refresh
+                if (refresh != null && refresh.intValue() > 0) {
+                    startAutomaticRefresh();
+                } else {
+                    Status status = chromecast.getStatus();
+                    handleCcStatus(status);
+                }
                 // assume device is online as we no longer get notified
                 updateStatus(ThingStatus.ONLINE);
             } catch (final Exception e) {
@@ -133,10 +146,29 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
         }, delay, TimeUnit.SECONDS);
     }
 
+    private void startAutomaticRefresh() {
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Status status = chromecast.getStatus();
+                    handleCcStatus(status);
+                } catch (Exception e) {
+                    logger.debug("Exception occurred during status refresh execution: {}", e.getMessage(), e);
+                }
+            }
+        };
+
+        refreshJob = scheduler.scheduleAtFixedRate(runnable, 0, refresh.intValue(), TimeUnit.SECONDS);
+    }
+
     @Override
     public void dispose() {
         if (chromecast != null) {
             destroyChromecast();
+        }
+        if (refreshJob != null) {
+            refreshJob.cancel(true);
         }
     }
 
@@ -168,12 +200,19 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
         }
 
         if (chromecast != null && (!chromecast.getAddress().equals(host) || (chromecast.getPort() != port))) {
-            destroyChromecast();
-        }
-        if (chromecast == null) {
-            createChromecast(host, port);
-        }
+            try {
+                refresh = (BigDecimal) getConfig().get(ChromecastBindingConstants.REFRESH_STATUS_SEC);
+            } catch (Exception e) {
+                logger.debug("Cannot set refresh parameter.", e);
+            }
 
+            if (chromecast != null && !chromecast.getAddress().equals(host)) {
+                destroyChromecast();
+            }
+            if (chromecast == null) {
+                createChromecast(host, port);
+            }
+        }
         scheduleConnect(true);
     }
 
@@ -201,6 +240,9 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
             case ChromecastBindingConstants.CHANNEL_PLAY_URI:
                 handlePlayUri(command);
                 break;
+            case ChromecastBindingConstants.CHANNEL_APP_ID:
+                handleAppID(command);
+                break;
             default:
                 logger.debug("Received command {} for unknown channel: {}", command, channelUID);
                 break;
@@ -226,6 +268,23 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
         } catch (IOException ex) {
             logger.debug("Failed to request media status with a running app: {}", ex.getMessage());
             // We were just able to request status, so let's not put the device OFFLINE.
+        }
+    }
+
+    private void handleAppID(Command command) {
+        if (command instanceof StringType) {
+            try {
+                if (chromecast.isAppAvailable(command.toString())) {
+                    if (!chromecast.isAppRunning(command.toString())) {
+                        final Application app = chromecast.launchApp(command.toString());
+                        logger.debug("Application launched: {}", app);
+                    }
+                } else {
+                    logger.error("Missing app id " + command.toString());
+                }
+            } catch (final IOException e) {
+                logger.debug("Failed loading app: {}", e.getMessage());
+            }
         }
     }
 
@@ -321,6 +380,12 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
             this.appSessionId = null;
         }
         handleCcVolume(status.volume);
+        if (status.getRunningApp() != null) {
+            handleCcAppID(status.getRunningApp().id);
+            handleCcAppName(status.getRunningApp().name);
+        } else {
+            handleCcAppID(null);
+        }
     }
 
     private void handleCcMediaStatus(final MediaStatus mediaStatus) {
@@ -351,6 +416,16 @@ public class ChromecastHandler extends BaseThingHandler implements ChromeCastSpo
         this.volume = value;
         updateState(new ChannelUID(getThing().getUID(), ChromecastBindingConstants.CHANNEL_MUTE),
                 volume.muted ? OnOffType.ON : OnOffType.OFF);
+    }
+
+    private void handleCcAppID(final String appid) {
+        StringType value = new StringType(appid);
+        updateState(new ChannelUID(getThing().getUID(), ChromecastBindingConstants.CHANNEL_APP_ID), value);
+    }
+
+    private void handleCcAppName(final String appName) {
+        StringType value = new StringType(appName);
+        updateState(new ChannelUID(getThing().getUID(), ChromecastBindingConstants.CHANNEL_APP_NAME), value);
     }
 
     @Override

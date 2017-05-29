@@ -8,6 +8,7 @@
  */
 package org.openhab.binding.chromecast.internal;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -60,6 +61,7 @@ public class ChromecastDiscoveryParticipant implements MDNSDiscoveryParticipant 
         properties.put(ChromecastBindingConstants.HOST, host);
         int port = service.getPort();
         properties.put(ChromecastBindingConstants.PORT, port);
+        properties.put(ChromecastBindingConstants.REFRESH_STATUS_SEC, BigDecimal.valueOf(0));
         logger.debug("Chromecast Found: {} {}", host, port);
         String friendlyName = service.getPropertyString("fn"); // friendly name;
 

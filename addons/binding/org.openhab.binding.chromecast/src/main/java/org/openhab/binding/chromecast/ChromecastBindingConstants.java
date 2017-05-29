@@ -40,10 +40,13 @@ public class ChromecastBindingConstants {
     public static final String CHANNEL_VOLUME = "volume";
     public static final String CHANNEL_MUTE = "mute";
     public static final String CHANNEL_PLAY_URI = "playuri";
+    public static final String CHANNEL_APP_ID = "appid";
+    public static final String CHANNEL_APP_NAME = "appname";
 
     // config parameters
     public static final String HOST = "ipAddress";
     public static final String PORT = "port";
+    public static final String REFRESH_STATUS_SEC = "refresh";
 
     // properties
     public static final String SERIAL_NUMBER = "serialNumber";

@@ -29,9 +29,31 @@
             <channel id="volume" typeId="volume"/>
             <channel id="mute" typeId="mute"/>
             <channel id="playuri" typeId="playuri"/>
+            <channel id="appid" typeId="appid"/>
+            <channel id="appname" typeId="appname"/>
         </channels>
 
         <config-description-ref uri="thing-type:chromecast:device" />
+
+        <config-description>
+            <parameter name="ipAddress" type="text">
+                <context>network-address</context>
+                <label>Network Address</label>
+                <description>Network address of the Chromecast device.</description>
+                <required>true</required>
+            </parameter>
+            <parameter name="port" type="integer">
+                <label>Network Port</label>
+                <description>Network port of the Chromecast device.</description>
+                <advanced>true</advanced>
+                <default>8009</default>
+            </parameter>
+            <parameter name="refresh" type="integer" min="0">
+                <label>Refresh interval</label>
+                <description>Specifies the refresh interval in seconds. To disable the auto refresh set this to 0</description>
+                <default>0</default>
+            </parameter>
+        </config-description>
     </thing-type>
 
     <!-- Chromecast HDMI dongle Thing Type -->
@@ -44,9 +66,31 @@
             <channel id="volume" typeId="volume"/>
             <channel id="mute" typeId="mute"/>
             <channel id="playuri" typeId="playuri"/>
+            <channel id="appid" typeId="appid"/>
+            <channel id="appname" typeId="appname"/>
         </channels>
 
         <config-description-ref uri="thing-type:chromecast:device" />
+
+        <config-description>
+            <parameter name="ipAddress" type="text">
+                <context>network-address</context>
+                <label>Network Address</label>
+                <description>Network address of the Chromecast device.</description>
+                <required>true</required>
+            </parameter>
+            <parameter name="port" type="integer">
+                <label>Network Port</label>
+                <description>Network port of the Chromecast device.</description>
+                <advanced>true</advanced>
+                <default>8009</default>
+            </parameter>
+            <parameter name="refresh" type="integer" min="0">
+                <label>Refresh interval</label>
+                <description>Specifies the refresh interval in seconds. To disable the auto refresh set this to 0</description>
+                <default>0</default>
+            </parameter>
+        </config-description>
     </thing-type>
 
     <channel-type id="volume">
@@ -72,6 +116,19 @@
         <item-type>Player</item-type>
         <label>Control</label>
         <description>Player control</description>
+    </channel-type>
+    
+    <channel-type id="appid">
+        <item-type>String</item-type>
+        <label>Application ID</label>
+        <description>Application ID</description>
+    </channel-type>
+    
+    <channel-type id="appname">
+        <item-type>String</item-type>
+        <label>Application Name</label>
+        <description>Application Name</description>
+        <state readOnly="true"/>
     </channel-type>
 
 </thing:thing-descriptions>
